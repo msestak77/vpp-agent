@@ -1,82 +1,76 @@
 import os
+
+from vpp_papi import VPP
 import fnmatch
-import time
-from hook import Hook
-from collections import deque
-
-# Sphinx creates auto-generated documentation by importing the python source
-# files and collecting the docstrings from them. The NO_VPP_PAPI flag allows
-# the vpp_papi_provider.py file to be importable without having to build
-# the whole vpp api if the user only wishes to generate the test documentation.
-do_import = True
-try:
-    no_vpp_papi = os.getenv("NO_VPP_PAPI")
-    if no_vpp_papi == "1":
-        do_import = False
-except:
-    pass
-
-if do_import:
-    from vpp_papi import VPP
-
-
-class UnexpectedApiReturnValueError(Exception):
-    """ exception raised when the API return value is unexpected """
-    pass
-
+import os
+import json
+import binascii
 
 class VppPapiProvider(object):
     """VPP-api provider using vpp-papi
-    @property hook: hook object providing before and after api/cli hooks
     """
 
-    _zero, _negative = range(2)
-
-    def __init__(self, name, shm_prefix, test_class, read_timeout):
-        self.hook = Hook("vpp-papi-provider")
-        self.name = name
-        self.shm_prefix = shm_prefix
-        self.test_class = test_class
-        self._expect_api_retval = self._zero
-        self._expect_stack = []
+    def __init__(self):
         jsonfiles = []
-
-        install_dir = os.getenv('VPP_TEST_INSTALL_PATH')
+        install_dir = '/usr/share/vpp/api/'
         for root, dirnames, filenames in os.walk(install_dir):
             for filename in fnmatch.filter(filenames, '*.api.json'):
                 jsonfiles.append(os.path.join(root, filename))
 
-        self.vpp = VPP(jsonfiles, logger=test_class.logger,
-                       read_timeout=read_timeout)
-        self._events = deque()
+        self.vpp = VPP(jsonfiles)
+        self.vpp.connect('vpp_agent_test')
+        self.papi = self.vpp.api
 
-    def __enter__(self):
-        return self
-
-    def expect_negative_api_retval(self):
-        """ Expect API failure """
-        self._expect_stack.append(self._expect_api_retval)
-        self._expect_api_retval = self._negative
-        return self
-
-    def expect_zero_api_retval(self):
-        """ Expect API success """
-        self._expect_stack.append(self._expect_api_retval)
-        self._expect_api_retval = self._zero
-        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         self._expect_api_retval = self._expect_stack.pop()
-
-    def connect(self):
-        """Connect the API to VPP"""
-        self.vpp.connect(self.name, self.shm_prefix)
-        self.papi = self.vpp.api
-        self.vpp.register_event_callback(self)
+        self.vpp.disconnect()
 
     def disconnect(self):
         """Disconnect the API from VPP"""
         self.vpp.disconnect()
+
+    def convert_reply(self, api_r):
+        """Process API reply / a part of API reply for smooth converting to
+        JSON string.
+
+        Apply binascii.hexlify() method for string values.
+        :param api_r: API reply.
+        :type api_r: Vpp_serializer reply object
+        :returns: Processed API reply / a part of API reply.
+        :rtype: dict
+        """
+        unwanted_fields = ['count', 'index']
+
+        reply_dict = dict()
+        reply_key = repr(api_r).split('(')[0]
+        reply_value = dict()
+        for item in dir(api_r):
+            if not item.startswith('_') and item not in unwanted_fields:
+                attr_value = getattr(api_r, item)
+                value = binascii.hexlify(attr_value) \
+                    if isinstance(attr_value, str) else attr_value
+                reply_value[item] = value
+        reply_dict[reply_key] = reply_value
+        return reply_dict
+
+    def process_reply(self, api_reply):
+        """Process API reply for smooth converting to JSON string.
+
+        :param api_reply: API reply.
+        :type api_reply: Vpp_serializer reply object or list of vpp_serializer
+            reply objects
+        :returns: Processed API reply.
+        :rtype: list or dict
+        """
+
+        if isinstance(api_reply, list):
+            converted_reply = list()
+            for r in api_reply:
+                converted_reply.append(self.convert_reply(r))
+        else:
+            converted_reply = self.convert_reply(api_reply)
+        return converted_reply
 
     def api(self, api_fn, api_args, expected_retval=0):
         """ Call API function and check it's return value.
@@ -86,47 +80,10 @@ class VppPapiProvider(object):
         :param expected_retval: Expected return value (Default value = 0)
         :returns: reply from the API
         """
-        self.hook.before_api(api_fn.__name__, api_args)
         reply = api_fn(**api_args)
-        if self._expect_api_retval == self._negative:
-            if hasattr(reply, 'retval') and reply.retval >= 0:
-                msg = "API call passed unexpectedly: expected negative "\
-                    "return value instead of %d in %s" % \
-                    (reply.retval, repr(reply))
-                self.test_class.logger.info(msg)
-                raise UnexpectedApiReturnValueError(msg)
-        elif self._expect_api_retval == self._zero:
-            if hasattr(reply, 'retval') and reply.retval != expected_retval:
-                msg = "API call failed, expected %d return value instead "\
-                    "of %d in %s" % (expected_retval, reply.retval,
-                                     repr(reply))
-                self.test_class.logger.info(msg)
-                raise UnexpectedApiReturnValueError(msg)
-        else:
-            raise Exception("Internal error, unexpected value for "
-                            "self._expect_api_retval %s" %
-                            self._expect_api_retval)
-        self.hook.after_api(api_fn.__name__, api_args)
-        return reply
+        json_reply = self.process_reply(reply)
 
-    def cli(self, cli):
-        """ Execute a CLI, calling the before/after hooks appropriately.
-        :param cli: CLI to execute
-        :returns: CLI output
-        """
-        self.hook.before_cli(cli)
-        cli += '\n'
-        r = self.papi.cli_inband(length=len(cli), cmd=cli)
-        self.hook.after_cli(cli)
-        if hasattr(r, 'reply'):
-            return r.reply.decode().rstrip('\x00')
-
-    def ppcli(self, cli):
-        """ Helper method to print CLI command in case of info logging level.
-        :param cli: CLI to execute
-        :returns: CLI output
-        """
-        return cli + "\n" + str(self.cli(cli))
+        return json_reply
 
     def sw_interface_dump(self, filter=None):
         """
@@ -398,14 +355,7 @@ class VppPapiProvider(object):
             self.papi.bier_route_dump,
             {'br_tbl_id': {"bt_set": bti.set_id,
                            "bt_sub_domain": bti.sub_domain_id,
-                           "bt_hdr_len_    def bier_disp_table_add_del(self,
-                                bdti,
-                                is_add=1):
-        """ BIER Disposition Table add/del """
-        return self.api(
-            self.papi.bier_disp_table_add_del,
-            {'bdt_tbl_id': bdti,
-             'bdt_is_add': is_add})id": bti.hdr_len_id}})
+                           "bt_hdr_len_id": bti.hdr_len_id}})
 
     def bier_imp_dump(self):
         return self.api(self.papi.bier_imp_dump, {})

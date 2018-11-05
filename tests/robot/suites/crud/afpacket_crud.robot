@@ -31,6 +31,9 @@ ${SYNC_SLEEP}=       3s
 Configure Environment
     [Tags]    setup
     Configure Environment 1
+    Sleep         ${SYNC_SLEEP}
+    vat_term: Interfaces Dump    agent_vpp_1
+    #Sleep         10
 
 Show Interfaces Before Setup
     vpp_term: Show Interfaces    agent_vpp_1

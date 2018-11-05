@@ -41,8 +41,8 @@ ${AGENT_VPP_1_REST_API_HOST_PORT}  9191
 ${AGENT_VPP_1_SOCKET_FOLDER}       /tmp
 ${AGENT_VPP_1_MEMIF_SOCKET_FOLDER}    /run/vpp
 ${AGENT_VPP_1_VPP_TERM_PROMPT}     vpp#
-${AGENT_VPP_1_VPP_VAT_PROMPT}      vat#
-
+#${AGENT_VPP_1_VPP_VAT_PROMPT}      vat#
+${AGENT_VPP_1_VPP_VAT_PROMPT}      >>>
 ${AGENT_VPP_2_DOCKER_IMAGE}        ${AGENT_VPP_IMAGE_NAME}
 ${AGENT_VPP_2_VPP_PORT}            5002
 ${AGENT_VPP_2_VPP_HOST_PORT}       5002
@@ -51,7 +51,7 @@ ${AGENT_VPP_2_REST_API_HOST_PORT}  9192
 ${AGENT_VPP_2_SOCKET_FOLDER}       /tmp
 ${AGENT_VPP_2_MEMIF_SOCKET_FOLDER}    /run/vpp
 ${AGENT_VPP_2_VPP_TERM_PROMPT}     vpp#
-${AGENT_VPP_2_VPP_VAT_PROMPT}      vat#
+${AGENT_VPP_2_VPP_VAT_PROMPT}      >>>
 
 ${AGENT_VPP_3_DOCKER_IMAGE}        ${AGENT_VPP_IMAGE_NAME}
 ${AGENT_VPP_3_VPP_PORT}            5002
@@ -61,7 +61,7 @@ ${AGENT_VPP_3_REST_API_HOST_PORT}  9193
 ${AGENT_VPP_3_SOCKET_FOLDER}       /tmp
 ${AGENT_VPP_3_MEMIF_SOCKET_FOLDER}    /run/vpp
 ${AGENT_VPP_3_VPP_TERM_PROMPT}     vpp#
-${AGENT_VPP_3_VPP_VAT_PROMPT}      vat#
+${AGENT_VPP_3_VPP_VAT_PROMPT}      >>>
 
 ${AGENT_VPP_4_DOCKER_IMAGE}        ${AGENT_VPP_IMAGE_NAME}
 ${AGENT_VPP_4_VPP_PORT}            5002
@@ -71,11 +71,11 @@ ${AGENT_VPP_4_REST_API_HOST_PORT}  9194
 ${AGENT_VPP_4_SOCKET_FOLDER}       /tmp
 ${AGENT_VPP_4_MEMIF_SOCKET_FOLDER}    /run/vpp
 ${AGENT_VPP_4_VPP_TERM_PROMPT}     vpp#
-${AGENT_VPP_4_VPP_VAT_PROMPT}      vat#
+${AGENT_VPP_4_VPP_VAT_PROMPT}      >>>
 
 # Variables for container with agent and without vpp
 #${AGENT_IMAGE_NAME}                ligato/dev-cn-infra:latest
-${AGENT_IMAGE_NAME}                ligato/vpp-agent:dev
+${AGENT_IMAGE_NAME}                ligato/dev-vpp-agent:dev
 ${AGENT_ETCD_CONF_PATH}            /opt/vpp-agent/dev/etcd.conf
 ${AGENT_KAFKA_CONF_PATH}           /opt/vpp-agent/dev/kafka.conf
 
@@ -124,7 +124,8 @@ ${AGENT_LIBMEMIF_4_MEMIF_SOCKET_FOLDER}    /run/vpp
 
 
 # Other variables
-${VAT_START_COMMAND}               vpp_api_test json
+#${VAT_START_COMMAND}               vpp_api_test json
+${VAT_START_COMMAND}               python
 ${RESULTS_FOLDER}                  results
 ${RESULTS_FOLDER_SUITE}            ${RESULTS_FOLDER}/${SUITE_NAME}
 ${TEST_DATA_FOLDER}                test_data
@@ -150,7 +151,7 @@ ${K8_CLUSTER_INTEGRATION1_DOCKER_COMMAND}   docker
 ${K8_GENERATED_CONFIG_FOLDER}         generated_config
 
 # Can use separate image for vswitch and VNF agents
-${VNF_IMAGE_NAME}                 ligato/vpp-agent:pantheon-dev
+${VNF_IMAGE_NAME}                 ligato/dev-vpp-agent:dev
 
 ${SSH_TIMEOUT}                        30
 ${SSH_LOG_OUTPUTS_TIMEOUT}            30

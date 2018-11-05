@@ -10,12 +10,16 @@ ${bd_timeout}=            15s
 *** Keywords ***
 
 vat_term: Check VAT Terminal
-    [Arguments]        ${node}
-    [Documentation]    Check VAT terminal on node ${node}
-    ${out}=            Write To Machine    ${node}_vat    ${DOCKER_COMMAND} exec -it ${node} /bin/bash
+    [Arguments]           ${node}
+    [Documentation]       Check VAT terminal on node ${node}
+    ${out}=               Write To Machine    ${node}_vat    ${DOCKER_COMMAND} exec -it ${node} /bin/bash
+    SSHLibrary.Put_file   ${CURDIR}/vpp_api.py	    /tmp/
+    Execute On Machine     ${node}_vat    ${DOCKER_COMMAND} cp /tmp/vpp_api.py ${node}:/
     ${command}=        Set Variable        ${VAT_START_COMMAND}
     ${out}=            Write To Machine    ${node}_vat    ${command}
     Should Contain     ${out}              ${${node}_VPP_VAT_PROMPT}
+    ${out}=            Write To Machine Until String    ${node}_vat    from vpp_api import VppPapiProvider    ${${node}_VPP_VAT_PROMPT}    delay=${SSH_READ_DELAY}s
+    ${out}=            Write To Machine Until String    ${node}_vat    vapi = VppPapiProvider()    ${${node}_VPP_VAT_PROMPT}    delay=${SSH_READ_DELAY}s
     [Return]           ${out}
 
 vat_term: Open VAT Terminal
@@ -32,8 +36,9 @@ vat_term: Exit VAT Terminal
 
 vat_term: Issue Command
     [Arguments]        ${node}     ${command}    ${delay}=${SSH_READ_DELAY}s
-    ${out}=            Write To Machine Until String    ${node}_vat    ${command}    ${${node}_VPP_VAT_PROMPT}    delay=${delay}
-#    Should Contain     ${out}             ${${node}_VPP_VAT_PROMPT}
+    ${out}=            Write To Machine Until String    ${node}_vat    ret = vapi.${command}()    ${${node}_VPP_VAT_PROMPT}    delay=${delay}
+    ${out}=            Write To Machine Until String    ${node}_vat    print(ret)    ${${node}_VPP_VAT_PROMPT}    delay=${delay}
+    Should Contain     ${out}             ${${node}_VPP_VAT_PROMPT}
     [Return]           ${out}
 
 vat_term: Interfaces Dump
